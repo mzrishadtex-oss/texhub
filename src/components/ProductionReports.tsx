@@ -522,7 +522,7 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({
                         </span>
                       </td>
                       <td className="border border-border px-4 py-3 text-sm text-foreground text-right">
-                        {entry.totalHours}h
+                        {entry.totalHours}
                       </td>
                     </tr>
                   );

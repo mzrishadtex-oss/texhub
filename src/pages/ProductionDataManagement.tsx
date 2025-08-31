@@ -508,7 +508,7 @@ export function ProductionDataManagement({ user }: ProductionDataManagementProps
                               </>
                             )}
                             <td className="border border-border px-4 py-3 text-sm text-foreground text-right">
-                              {entry.efficiency || 0}%
+                              {entry.totalHours}
                             </td>
                             <td className="border border-border px-4 py-3 text-center">
                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
