@@ -6,7 +6,7 @@ import { ProductionEntry } from '../types/production';
 
 interface ProductionDataEntryProps {
   productionType: 'knitting' | 'dyeing' | 'finishing';
-  onSave: (data: ProductionEntry) => void;
+  onSave: (data: Omit<ProductionEntry, 'id' | 'userId' | 'timestamp'>) => void;
   editingEntry?: ProductionEntry | null;
   onCancel: () => void;
 }
@@ -19,14 +19,20 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
 }) => {
   const [formData, setFormData] = useState<Partial<ProductionEntry>>({
     date: new Date().toISOString().split('T')[0],
-    shift: 'A',
-    productionType,
+    shift: 'morning',
+    type: productionType,
     targetProduction: 0,
     actualProduction: 0,
     efficiency: 0,
     qualityGrade: 'A',
     defectCount: 0,
     machineDowntime: 0,
+    startDateTime: '',
+    endDateTime: '',
+    totalHours: '0 Hrs 0 Min',
+    operator: '',
+    supervisor: '',
+    machineNo: '',
     notes: ''
   });
 
@@ -36,15 +42,46 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
     }
   }, [editingEntry]);
 
+  // Function to calculate total hours in "X Hrs Y Min" format
+  const calculateTotalHours = (startDateTime: string, endDateTime: string): string => {
+    if (!startDateTime || !endDateTime) return '0 Hrs 0 Min';
+    
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    
+    if (end <= start) return '0 Hrs 0 Min';
+    
+    const diffMs = end.getTime() - start.getTime();
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    return `${hours} Hrs ${minutes} Min`;
+  };
+
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => {
       const updated = { ...prev, [field]: value };
       
-      // Auto-calculate efficiency
+      // Auto-calculate total hours when start or end time changes
+      if (field === 'startDateTime' || field === 'endDateTime') {
+        const startDateTime = field === 'startDateTime' ? value : updated.startDateTime || '';
+        const endDateTime = field === 'endDateTime' ? value : updated.endDateTime || '';
+        updated.totalHours = calculateTotalHours(startDateTime, endDateTime);
+      }
+      
+      // Auto-calculate efficiency for knitting and garments
       if (field === 'actualProduction' || field === 'targetProduction') {
         const actual = field === 'actualProduction' ? value : updated.actualProduction || 0;
         const target = field === 'targetProduction' ? value : updated.targetProduction || 0;
         updated.efficiency = target > 0 ? Math.round((actual / target) * 100) : 0;
+      }
+      
+      // Auto-calculate efficiency for garments (completedQuantity vs targetQuantity)
+      if (field === 'completedQuantity' || field === 'targetQuantity') {
+        const completed = field === 'completedQuantity' ? value : updated.completedQuantity || 0;
+        const target = field === 'targetQuantity' ? value : updated.targetQuantity || 0;
+        updated.efficiency = target > 0 ? Math.round((completed / target) * 100) : 0;
       }
       
       return updated;
@@ -53,7 +90,123 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData as ProductionEntry);
+    
+    // Validate required fields
+    if (!formData.operator || !formData.supervisor || !formData.machineNo || !formData.startDateTime || !formData.endDateTime) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    
+    // Create the entry based on production type
+    let entryData: any = {
+      type: productionType,
+      date: formData.date,
+      shift: formData.shift,
+      operator: formData.operator,
+      supervisor: formData.supervisor,
+      machineNo: formData.machineNo,
+      startDateTime: formData.startDateTime,
+      endDateTime: formData.endDateTime,
+      totalHours: formData.totalHours,
+      notes: formData.notes || '',
+    };
+
+    // Add type-specific fields
+    if (productionType === 'knitting') {
+      entryData = {
+        ...entryData,
+        fabricType: formData.fabricType || '',
+        yarnType: formData.yarnType || '',
+        yarnLot: formData.yarnLot || '',
+        gauge: formData.gauge || '',
+        gsm: formData.gsm || 0,
+        width: formData.width || 0,
+        targetProduction: formData.targetProduction || 0,
+        actualProduction: formData.actualProduction || 0,
+        efficiency: formData.efficiency || 0,
+        defects: formData.defects || {
+          holes: 0,
+          dropStitches: 0,
+          yarnBreaks: 0,
+          other: 0,
+        },
+        qualityGrade: formData.qualityGrade || 'A',
+        rpm: formData.rpm || 0,
+        needleBreaks: formData.needleBreaks || 0,
+      };
+    } else if (productionType === 'dyeing') {
+      entryData = {
+        ...entryData,
+        fabricType: formData.fabricType || '',
+        color: formData.color || '',
+        dyeType: formData.dyeType || '',
+        batchWeight: formData.batchWeight || 0,
+        liquorRatio: formData.liquorRatio || 0,
+        temperature: formData.temperature || 0,
+        pH: formData.phLevel || 0,
+        processTime: formData.processTime || 0,
+        chemicalConsumption: formData.chemicalConsumption || {
+          dyes: 0,
+          salt: 0,
+          soda: 0,
+          auxiliaries: 0,
+        },
+        qualityResults: formData.qualityResults || {
+          colorMatch: 'excellent',
+          fastness: 'excellent',
+          uniformity: 'excellent',
+        },
+        waterConsumption: formData.waterConsumption || 0,
+        energyConsumption: formData.energyConsumption || 0,
+        wasteGenerated: formData.wasteGenerated || 0,
+      };
+    } else if (productionType === 'finishing') {
+      entryData = {
+        ...entryData,
+        style: formData.style || '',
+        size: formData.size || '',
+        color: formData.color || '',
+        targetQuantity: formData.targetQuantity || 0,
+        completedQuantity: formData.completedQuantity || 0,
+        efficiency: formData.efficiency || 0,
+        defects: formData.defects || {
+          stitchingDefects: 0,
+          measurementDefects: 0,
+          fabricDefects: 0,
+          other: 0,
+        },
+        operations: formData.operations || {
+          cutting: 0,
+          sewing: 0,
+          finishing: 0,
+          packing: 0,
+        },
+        qualityGrade: formData.qualityGrade || 'A',
+        rework: formData.rework || 0,
+      };
+    }
+
+    onSave(entryData);
+    
+    // Reset form after successful save
+    setFormData({
+      date: new Date().toISOString().split('T')[0],
+      shift: 'morning',
+      type: productionType,
+      targetProduction: 0,
+      actualProduction: 0,
+      efficiency: 0,
+      qualityGrade: 'A',
+      defectCount: 0,
+      machineDowntime: 0,
+      startDateTime: '',
+      endDateTime: '',
+      totalHours: '0 Hrs 0 Min',
+      operator: '',
+      supervisor: '',
+      machineNo: '',
+      notes: ''
+    });
   };
 
   return (
@@ -88,17 +241,17 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Shift</label>
               <select
-                value={formData.shift || 'A'}
+                value={formData.shift || 'morning'}
                 onChange={(e) => handleInputChange('shift', e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
               >
-                <option value="A">Shift A</option>
-                <option value="B">Shift B</option>
-                <option value="C">Shift C</option>
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+                <option value="night">Night</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Operator</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Operator *</label>
               <input
                 type="text"
                 value={formData.operator || ''}
@@ -109,7 +262,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Supervisor</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Supervisor *</label>
               <input
                 type="text"
                 value={formData.supervisor || ''}
@@ -130,7 +283,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
           </div>
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Machine No</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Machine No *</label>
               <input
                 type="text"
                 value={formData.machineNo || ''}
@@ -141,15 +294,15 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Start Time</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Start Date & Time *</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10">
                   <Clock className="h-5 w-5 text-secondary" />
                 </div>
                 <input
-                  type="time"
-                  value={formData.startTime || ''}
-                  onChange={(e) => handleInputChange('startTime', e.target.value)}
+                  type="datetime-local"
+                  value={formData.startDateTime || ''}
+                  onChange={(e) => handleInputChange('startDateTime', e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-border shadow-sm focus:border-secondary focus:ring-4 focus:ring-secondary/20 bg-background text-foreground transition-all duration-300 hover:border-secondary/50 hover:shadow-md font-medium text-sm"
                   required
                 />
@@ -159,15 +312,15 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">End Time</label>
+              <label className="block text-sm font-medium text-foreground mb-1">End Date & Time *</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10">
                   <Timer className="h-5 w-5 text-accent" />
                 </div>
                 <input
-                  type="time"
-                  value={formData.endTime || ''}
-                  onChange={(e) => handleInputChange('endTime', e.target.value)}
+                  type="datetime-local"
+                  value={formData.endDateTime || ''}
+                  onChange={(e) => handleInputChange('endDateTime', e.target.value)}
                   className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-border shadow-sm focus:border-accent focus:ring-4 focus:ring-accent/20 bg-background text-foreground transition-all duration-300 hover:border-accent/50 hover:shadow-md font-medium text-sm"
                   required
                 />
@@ -178,15 +331,18 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Total Hours</label>
-              <input
-                type="number"
-                value={formData.totalHours || ''}
-                onChange={(e) => handleInputChange('totalHours', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-secondary bg-background text-foreground"
-                placeholder="0.0"
-                step="0.1"
-                min="0"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.totalHours || '0 Hrs 0 Min'}
+                  readOnly
+                  className="w-full px-3 py-2 border border-border rounded-md bg-muted/50 text-foreground font-mono text-center"
+                  placeholder="Auto-calculated"
+                />
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -221,13 +377,26 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Needle Count</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target Production (kg)</label>
                   <input
                     type="number"
-                    value={formData.needleCount || ''}
-                    onChange={(e) => handleInputChange('needleCount', parseInt(e.target.value))}
+                    value={formData.targetProduction || ''}
+                    onChange={(e) => handleInputChange('targetProduction', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="0"
+                    placeholder="0.0"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Actual Production (kg)</label>
+                  <input
+                    type="number"
+                    value={formData.actualProduction || ''}
+                    onChange={(e) => handleInputChange('actualProduction', parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                    placeholder="0.0"
+                    step="0.1"
                     min="0"
                   />
                 </div>
@@ -236,12 +405,47 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                   <input
                     type="number"
                     value={formData.gsm || ''}
-                    onChange={(e) => handleInputChange('gsm', parseFloat(e.target.value))}
+                    onChange={(e) => handleInputChange('gsm', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
                     placeholder="0.0"
                     step="0.1"
                     min="0"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Width (cm)</label>
+                  <input
+                    type="number"
+                    value={formData.width || ''}
+                    onChange={(e) => handleInputChange('width', parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                    placeholder="0.0"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Efficiency (%)</label>
+                  <input
+                    type="number"
+                    value={formData.efficiency || ''}
+                    readOnly
+                    className="w-full px-3 py-2 border border-border rounded-md bg-muted/50 text-foreground font-mono text-center"
+                    placeholder="Auto-calculated"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Quality Grade</label>
+                  <select
+                    value={formData.qualityGrade || 'A'}
+                    onChange={(e) => handleInputChange('qualityGrade', e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                  >
+                    <option value="A">Grade A</option>
+                    <option value="B">Grade B</option>
+                    <option value="C">Grade C</option>
+                    <option value="Reject">Reject</option>
+                  </select>
                 </div>
               </>
             )}
@@ -249,13 +453,13 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
             {productionType === 'dyeing' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Batch No</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Fabric Type</label>
                   <input
                     type="text"
-                    value={formData.batchNo || ''}
-                    onChange={(e) => handleInputChange('batchNo', e.target.value)}
+                    value={formData.fabricType || ''}
+                    onChange={(e) => handleInputChange('fabricType', e.target.value)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="Batch number"
+                    placeholder="Fabric type"
                   />
                 </div>
                 <div>
@@ -269,11 +473,23 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Batch Weight (kg)</label>
+                  <input
+                    type="number"
+                    value={formData.batchWeight || ''}
+                    onChange={(e) => handleInputChange('batchWeight', parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                    placeholder="0.0"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-foreground mb-1">Temperature (°C)</label>
                   <input
                     type="number"
                     value={formData.temperature || ''}
-                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
                     placeholder="0.0"
                     step="0.1"
@@ -285,12 +501,24 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                   <input
                     type="number"
                     value={formData.phLevel || ''}
-                    onChange={(e) => handleInputChange('phLevel', parseFloat(e.target.value))}
+                    onChange={(e) => handleInputChange('phLevel', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
                     placeholder="0.0"
                     step="0.1"
                     min="0"
                     max="14"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Liquor Ratio</label>
+                  <input
+                    type="number"
+                    value={formData.liquorRatio || ''}
+                    onChange={(e) => handleInputChange('liquorRatio', parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                    placeholder="1:10"
+                    step="0.1"
+                    min="0"
                   />
                 </div>
               </>
@@ -299,165 +527,72 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
             {productionType === 'finishing' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Process Type</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Style</label>
                   <input
                     type="text"
-                    value={formData.processType || ''}
-                    onChange={(e) => handleInputChange('processType', e.target.value)}
+                    value={formData.style || ''}
+                    onChange={(e) => handleInputChange('style', e.target.value)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="Process type"
+                    placeholder="Garment style"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Speed (m/min)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Color</label>
+                  <input
+                    type="text"
+                    value={formData.color || ''}
+                    onChange={(e) => handleInputChange('color', e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                    placeholder="Color"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Target Quantity</label>
                   <input
                     type="number"
-                    value={formData.speed || ''}
-                    onChange={(e) => handleInputChange('speed', parseFloat(e.target.value))}
+                    value={formData.targetQuantity || ''}
+                    onChange={(e) => handleInputChange('targetQuantity', parseInt(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="0.0"
-                    step="0.1"
+                    placeholder="0"
                     min="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Width (cm)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Completed Quantity</label>
                   <input
                     type="number"
-                    value={formData.width || ''}
-                    onChange={(e) => handleInputChange('width', parseFloat(e.target.value))}
+                    value={formData.completedQuantity || ''}
+                    onChange={(e) => handleInputChange('completedQuantity', parseInt(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="0.0"
-                    step="0.1"
+                    placeholder="0"
                     min="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Tension</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">Efficiency (%)</label>
                   <input
                     type="number"
-                    value={formData.tension || ''}
-                    onChange={(e) => handleInputChange('tension', parseFloat(e.target.value))}
-                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
-                    placeholder="0.0"
-                    step="0.1"
-                    min="0"
+                    value={formData.efficiency || ''}
+                    readOnly
+                    className="w-full px-3 py-2 border border-border rounded-md bg-muted/50 text-foreground font-mono text-center"
+                    placeholder="Auto-calculated"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Quality Grade</label>
+                  <select
+                    value={formData.qualityGrade || 'A'}
+                    onChange={(e) => handleInputChange('qualityGrade', e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-accent bg-background text-foreground"
+                  >
+                    <option value="A">Grade A</option>
+                    <option value="B">Grade B</option>
+                    <option value="C">Grade C</option>
+                    <option value="Reject">Reject</option>
+                  </select>
                 </div>
               </>
             )}
-          </div>
-        </div>
-
-        {/* Production Metrics Section */}
-        <div className="bg-destructive/10 p-6 rounded-lg border border-destructive/20">
-          <div className="flex items-center mb-4">
-            <BarChart3 className="w-5 h-5 text-destructive mr-2" />
-            <h3 className="text-lg font-semibold text-foreground">Production Metrics</h3>
-          </div>
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Target Production</label>
-              <input
-                type="number"
-                value={formData.targetProduction || ''}
-                onChange={(e) => handleInputChange('targetProduction', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="0.0"
-                step="0.1"
-                min="0"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Actual Production</label>
-              <input
-                type="number"
-                value={formData.actualProduction || ''}
-                onChange={(e) => handleInputChange('actualProduction', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="0.0"
-                step="0.1"
-                min="0"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Efficiency (%)</label>
-              <input
-                type="number"
-                value={formData.efficiency || ''}
-                onChange={(e) => handleInputChange('efficiency', parseFloat(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-muted text-foreground"
-                placeholder="0"
-                readOnly
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Quality Grade</label>
-              <select
-                value={formData.qualityGrade || 'A'}
-                onChange={(e) => handleInputChange('qualityGrade', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-              >
-                <option value="A">Grade A</option>
-                <option value="B">Grade B</option>
-                <option value="C">Grade C</option>
-                <option value="D">Grade D</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Defects & Quality Control Section */}
-        <div className="bg-destructive/5 p-6 rounded-lg border border-destructive/30">
-          <div className="flex items-center mb-4">
-            <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
-            <h3 className="text-lg font-semibold text-foreground">Defects & Quality Control</h3>
-          </div>
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Defect Count</label>
-              <input
-                type="number"
-                value={formData.defectCount || ''}
-                onChange={(e) => handleInputChange('defectCount', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="0"
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Defect Type</label>
-              <input
-                type="text"
-                value={formData.defectType || ''}
-                onChange={(e) => handleInputChange('defectType', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="Defect description"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Machine Downtime (min)</label>
-              <input
-                type="number"
-                value={formData.machineDowntime || ''}
-                onChange={(e) => handleInputChange('machineDowntime', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="0"
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Downtime Reason</label>
-              <input
-                type="text"
-                value={formData.downtimeReason || ''}
-                onChange={(e) => handleInputChange('downtimeReason', e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground"
-                placeholder="Reason for downtime"
-              />
-            </div>
           </div>
         </div>
 
@@ -474,7 +609,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                 <input
                   type="number"
                   value={formData.dyesUsed || ''}
-                  onChange={(e) => handleInputChange('dyesUsed', parseFloat(e.target.value))}
+                  onChange={(e) => handleInputChange('dyesUsed', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
                   placeholder="0.0"
                   step="0.01"
@@ -486,7 +621,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                 <input
                   type="number"
                   value={formData.saltUsed || ''}
-                  onChange={(e) => handleInputChange('saltUsed', parseFloat(e.target.value))}
+                  onChange={(e) => handleInputChange('saltUsed', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
                   placeholder="0.0"
                   step="0.01"
@@ -498,7 +633,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                 <input
                   type="number"
                   value={formData.sodaUsed || ''}
-                  onChange={(e) => handleInputChange('sodaUsed', parseFloat(e.target.value))}
+                  onChange={(e) => handleInputChange('sodaUsed', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
                   placeholder="0.0"
                   step="0.01"
@@ -510,7 +645,7 @@ export const ProductionDataEntry: React.FC<ProductionDataEntryProps> = ({
                 <input
                   type="number"
                   value={formData.auxiliariesUsed || ''}
-                  onChange={(e) => handleInputChange('auxiliariesUsed', parseFloat(e.target.value))}
+                  onChange={(e) => handleInputChange('auxiliariesUsed', parseFloat(e.target.value) || 0)}
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
                   placeholder="0.0"
                   step="0.01"

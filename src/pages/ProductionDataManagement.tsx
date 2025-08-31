@@ -130,13 +130,14 @@ export function ProductionDataManagement({ user }: ProductionDataManagementProps
       if (editingEntry) {
         await updateDoc(doc(db, "users", user.uid, "productionEntries", editingEntry.id), newEntry);
         showToast({ message: "Production entry updated successfully!", type: 'success' });
+        setEditingEntry(null);
       } else {
         await addDoc(collection(db, "users", user.uid, "productionEntries"), newEntry);
         showToast({ message: "Production entry saved successfully!", type: 'success' });
       }
       
-      setIsEntryDialogOpen(false);
-      setEditingEntry(null);
+      // Don't close the dialog, just show success message
+      // User can continue adding more entries or manually close
     } catch (error) {
       console.error("Error saving production entry:", error);
       showToast({ message: "Error saving production entry. Check console for details.", type: 'error' });
@@ -312,7 +313,6 @@ export function ProductionDataManagement({ user }: ProductionDataManagementProps
                   editingEntry={editingEntry}
                   onCancel={() => {
                     setEditingEntry(null);
-                    setIsEntryDialogOpen(false);
                   }}
                 />
               </div>

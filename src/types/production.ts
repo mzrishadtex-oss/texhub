@@ -5,9 +5,9 @@ export interface BaseProductionEntry {
   operator: string;
   supervisor: string;
   machineNo: string;
-  startTime: string;
-  endTime: string;
-  totalHours: number;
+  startDateTime: string; // ISO datetime string
+  endDateTime: string;   // ISO datetime string
+  totalHours: string;    // Format: "12 Hrs 30 Min"
   notes?: string;
   userId: string;
   timestamp: string;
@@ -169,9 +169,9 @@ export const initialKnittingEntry: Omit<KnittingProductionEntry, 'id' | 'userId'
   operator: '',
   supervisor: '',
   machineNo: '',
-  startTime: '',
-  endTime: '',
-  totalHours: 0,
+  startDateTime: '',
+  endDateTime: '',
+  totalHours: '0 Hrs 0 Min',
   fabricType: '',
   yarnType: '',
   yarnLot: '',
@@ -200,9 +200,9 @@ export const initialDyeingEntry: Omit<DyeingProductionEntry, 'id' | 'userId' | '
   operator: '',
   supervisor: '',
   machineNo: '',
-  startTime: '',
-  endTime: '',
-  totalHours: 0,
+  startDateTime: '',
+  endDateTime: '',
+  totalHours: '0 Hrs 0 Min',
   fabricType: '',
   color: '',
   dyeType: '',
@@ -235,9 +235,9 @@ export const initialGarmentsEntry: Omit<GarmentsProductionEntry, 'id' | 'userId'
   operator: '',
   supervisor: '',
   machineNo: '',
-  startTime: '',
-  endTime: '',
-  totalHours: 0,
+  startDateTime: '',
+  endDateTime: '',
+  totalHours: '0 Hrs 0 Min',
   style: '',
   size: '',
   color: '',
